@@ -47,7 +47,7 @@ An epic, anime-inspired ultimate ability that unleashes a devastating energy bla
 
 ---
 
-## 🐛 Optimization & Bug Fixes (The Senior Dev Upgrades)
+## 🐛 Optimization & Bug Fixes (The Junior Dev Upgrades)
 * **Ghost Elimination:** Fixed a critical scope/variable bug where dead mobs would turn into invisible "ghosts" tracking the player's camera.
 * **Multi-Kill Threading:** Refactored bullet collision arrays (`bullets.remove` exception handling) to completely prevent Pygame crashes when multiple enemies are pierced by a single frame shot.
 * **Screen Coordinate Alignment:** Fully decoupled rendering layers. Particle explosions, impact effects, and the UI overlay are drawn strictly using screen matrix offsets, preventing them from spawning out-of-bounds.
