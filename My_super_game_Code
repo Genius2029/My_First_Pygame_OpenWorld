@@ -1,0 +1,1361 @@
+import pygame
+import random
+import math
+import json
+
+GOLD = "\033[33m" 
+RED = "\033[31m"
+
+pygame.mixer.init()
+pygame.init()
+                                                                # Sounds
+aura_sound = pygame.mixer.Sound("test.py/Sounds/aura.mp3")
+
+boss_spawn_sound = pygame.mixer.Sound("test.py/Sounds/boss_spawn.mp3")
+
+achievement_sound = pygame.mixer.Sound("test.py/Sounds/achievement.mp3")
+
+buy_sound = pygame.mixer.Sound("test.py/Sounds/buy.mp3")
+                                                                #base 
+WIDTH, HEIGHT = 1100 , 800
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("My Super Game")
+clock = pygame.time.Clock()
+game_state = "MENU"
+                                                                #images
+try:
+    background = pygame.image.load('test.py/Images/bg.png').convert_alpha()
+    background = pygame.transform.scale(background, (3000, 3000))
+
+    boss_img = pygame.image.load('test.py/Images/boss.png').convert_alpha()
+    boss_img = pygame.transform.scale(boss_img, (80, 80))
+
+    pistol_img = pygame.image.load('test.py/Images/character.png').convert_alpha()
+    pistol_img = pygame.transform.scale(pistol_img, (60, 40)) 
+
+    died = pygame.image.load('test.py/Images/died.png').convert_alpha()
+    died = pygame.transform.scale(died, (WIDTH,HEIGHT))
+
+    enemy_img = pygame.image.load('test.py/Images/enemy.png').convert_alpha()
+    enemy_img = pygame.transform.scale(enemy_img, (50, 50))
+
+    rifle_img = pygame.image.load('test.py/Images/hero_rifle.png').convert_alpha()
+    rifle_img = pygame.transform.scale(rifle_img, (50, 50)) 
+
+    shotgun_img = pygame.image.load('test.py/Images/hero_shotgun.png').convert_alpha()
+    shotgun_img = pygame.transform.scale(shotgun_img, (100, 100)) 
+
+    sword_img = pygame.image.load('test.py/Images/hero_sword.png').convert_alpha()
+    sword_img = pygame.transform.scale(sword_img, (50, 50))
+
+    menu = pygame.image.load('test.py/Images/menu.jpg').convert_alpha()
+    menu = pygame.transform.scale(menu, (WIDTH,HEIGHT))
+
+    shop = pygame.image.load('test.py/Images/shop.png').convert_alpha()
+    shop = pygame.transform.scale(shop, (WIDTH,HEIGHT))
+
+    survival_enemy_img = pygame.image.load('test.py/Images/survival_mob.png').convert_alpha()
+    survival_enemy_img = pygame.transform.scale(survival_enemy_img, (50, 50))
+
+except Exception as e:
+    print(f"Ошибка загрузки файлов:{e}")
+    
+    pistol_img = pygame.Surface((50, 50))
+    rifle_img = pygame.Surface((50, 50))
+    shotgun_img = pygame.Surface((50, 50))
+    sword_img = pygame.Surface((50, 50))
+    survival_enemy_img = pygame.Surface((50, 50))
+    enemy_img = pygame.Surface((50, 50))
+    boss_img = pygame.Surface((80, 80))
+    menu = pygame.Surface((WIDTH,HEIGHT))
+    background = pygame.Surface((WIDTH,HEIGHT))
+    shop = pygame.Surface((WIDTH,HEIGHT))
+    died = pygame.Surface((WIDTH,HEIGHT))
+                                                                #variables
+font = pygame.font.SysFont("Comic Sans MS", 28)
+rage_meter = 0
+last_milestone = 0 
+damage_numbers = []
+shadows = []
+messages = [] 
+enemies = []
+unlocked_achievements = set()
+survival_wave = 1
+wave_timer = 0
+high_score = 0
+
+lvl_flash_timer = 0
+freeze_timer = 0
+
+                                                                #classes
+
+                                                                #weapons
+class Weapon:
+    def __init__(self, name, shoot_delay, bullet_speed, damage, bullet_width, bullet_height, bullet_color, player_sprite ):
+        self.name = name
+        self.shoot_delay = shoot_delay 
+        self.bullet_speed = bullet_speed
+        self.damage = damage 
+        self.b_width = bullet_width
+        self.b_height = bullet_height
+        self.b_color = bullet_color 
+        
+        self.player_sprite = player_sprite
+
+sword = Weapon("sword", 15, 0, 5, 80, 80, (0, 255, 150), sword_img)
+
+pistol = Weapon("pistol", 20, 10, 1, 10, 10, (255, 200, 0), pistol_img)
+
+rifle = Weapon("rifle", 4, 16, 1, 15, 5, (255, 255, 255), rifle_img)
+
+shotgun = Weapon("shotgun", 45, 4, 3, 30, 30, (255, 50, 0), shotgun_img)
+
+purchased_weapons = ["pistol"] 
+bullets = []
+shells = []
+shot_particles = []
+bullets_to_remove = []
+particles = []
+shoot_timer = 0
+sword_lifetime = 0
+weapon_angle = 0
+                                                                #player
+class Player:
+    def __init__(self):
+        self.x = 1500
+        self.y = 1500
+        self.basespeed = 3
+        self.stamina = 100
+        self.max_stamina = 100
+        self.ult_energy = 0
+        self.lvl = 1
+        self.xp = 0
+        self.xp_to_next = 100
+        self.xp_ratio = self.xp / self.xp_to_next
+        self.size = 50
+        self.score = 0
+        self.current_weapon = pistol
+        self.current_weapon = rifle
+        self.current_weapon = shotgun
+        self.has_revive = True
+
+    def move(self,):
+        if keys[pygame.K_LSHIFT] and self.stamina > 0:
+            if random.randint(1, 3) == 1:
+                shadows.append([self.x, self.y, 150])
+            current_speed = self.basespeed * 2
+            self.stamina -= 0.5
+            
+        else:
+            current_speed = self.basespeed
+            if self.stamina < 100: self.stamina += 0.25
+
+        if keys[pygame.K_a]: self.x  -= current_speed
+        if keys[pygame.K_d]: self.x  += current_speed
+        if keys[pygame.K_w]: self.y  -= current_speed
+        if keys[pygame.K_s]: self.y  += current_speed
+
+        if keys[pygame.K_a] or keys[pygame.K_d] or keys[pygame.K_w] or keys[pygame.K_s]:
+            shadows.append([self.x, self.y, 100])
+
+    def draw(self, screen, img, offset_x, offset_y):
+        screen_x = hero.x + offset_x
+        screen_y = hero.y + offset_y
+        screen.blit(img, (screen_x, screen_y))
+        if hero.current_weapon.name == "sword":
+            rotated_sword = pygame.transform.rotate(hero.current_weapon.player_sprite, weapon_angle)
+            screen.blit(rotated_sword, (screen_x , screen_y ))
+        else:
+            screen.blit(self.current_weapon.player_sprite, (screen_x, screen_y))
+
+    def draw_xp(self,screen, xp_ratio):
+        if self.xp_to_next > 0:
+            self.xp_ratio = self.xp / self.xp_to_next
+            if xp_ratio > 1: xp_ratio = 1
+        else:
+            xp_ratio = 0
+        pygame.draw.rect(screen, (255, 215, 0), (20, 130, xp_ratio * 200, 10))
+hero = Player()
+                                                                #Wave_enemies
+class Wave_Enemy:
+    def __init__(self):
+        self.wave_x = random.randint(1800, 2100) 
+        self.wave_y = random.randint(1500, 1800)
+        self.enemy_speed = 1
+        self.alive = True
+    def move(self, hero):
+        if freeze_timer < 0 or  not haki.ult_active: 
+            if self.wave_x < hero.x: self.wave_x += 1 
+            if self.wave_x > hero.x: self.wave_x -= 1 
+            if self.wave_y < hero.y: self.wave_y += 1 
+            if self.wave_y > hero.y: self.wave_y -= 1 
+        else:
+            pass
+    
+    def draw(self, screen, img , offset_x, offset_y):
+        if self.alive:
+            screen.blit(img, (self.wave_x + offset_x , self.wave_y + offset_y))
+wave_Enemy = Wave_Enemy()
+            
+                                                                #enemy
+class Enemy:
+    def __init__(self,speed):
+        self.x = 1800
+        self.y = 1500
+        self.enemy_hit_timer = 0
+        self.hit_timer = 0
+        self.enemy_speed = speed
+        self.alive = True
+
+    def move(self, x, y, ult_active):
+        if not self.alive: 
+            return
+        else:
+            if freeze_timer < 0 or not ult_active:
+                if self.x < x: self.x += 1
+                if self.x > x: self.x -= 1
+                if self.y < y: self.y += 1
+                if self.y > y: self.y -= 1
+            else:
+                pass
+
+    def draw(self, screen, img, offset_x, offset_y):
+        if self.alive:
+            screen.blit(img, (self.x + offset_x, self.y + offset_y))
+        if self.alive == False:
+            return
+        
+mob = Enemy(1)
+                                                                #boss
+class Boss:
+    def __init__(self):
+        self.x = 1500
+        self.y = -200
+        self.hp = 25
+        self.max_hp = 25
+        self.speed = 0.7
+        self.last_spawned_boss_level = 0
+        self.active = False
+        self.spawned = False
+
+    def spawn(self):
+        global boss_spawn_sound
+        current_boss_level = hero.score // 10
+        if hero.score >= 10 and current_boss_level > self.last_spawned_boss_level and not self.active:
+            self.active = True
+            self.spawned = True
+            self.last_spawned_boss_level = current_boss_level 
+            boss_spawn_sound.play()
+            show_msg(f"BOSS {current_boss_level} LVL IS SPAWNED!")
+            print(f"{RED} BOSS {current_boss_level} LVL IS SPAWNED!")
+
+    def move(self, hero , ult_active):
+        if self.active and self.spawned:
+            if not ult_active:
+                if self.x < hero.x: self.x += self.speed
+                if self.x > hero.x: self.x -= self.speed
+                if self.y < hero.y: self.y += self.speed
+                if self.y > hero.y: self.y -= self.speed
+            else:
+                pass
+    def draw(self, screen , boss_img, offset_x , offset_y):
+        if self.active and self.spawned:
+            screen.blit(boss_img, (self.x + offset_x, self.y + offset_y))
+            pygame.draw.rect(screen, (255, 0, 0), (self.x + offset_x, self.y - 10 + offset_y, (self.hp/self.max_hp)*80, 5))
+tank = Boss()
+                                                                #Haki(ultimate)
+class Haki:
+    def __init__(self):
+        self.ultimate_energy = 0
+        self.max_ultimate = 100
+        self.ult_bar_width = 200
+        self.ult_bar_height = 20
+        self.ult_radius = 0 
+        self.ult_speed = 15
+        self.ult_waves = 0
+        self.max_waves = 3
+        self.ult_cooldown = 0
+        self.glow_alpha = 0
+        self.glow_direction = 5
+        self.shake_timer = 0
+        self.haki_overlay = pygame.Surface((3000, 3000))
+        self.ult_active = False
+
+    def Ult(self, screen , hero , mob , tank , haki  , wave_Enemy):
+
+        if self.ult_active:
+            self.ult_radius += 10
+            screen.blit(self.haki_overlay, (0, 0))
+
+            center_x = 580 - 35
+            center_y = 380 + 45
+
+            pygame.draw.circle(screen, (255, 0, 0), (center_x, center_y), self.ult_radius, 3)
+
+            if random.randint(1, 2) == 1:
+
+                start_x = center_x + random.randint(-60, 60)
+                start_y = center_y + random.randint(-60, 60)
+                points = [(start_x, start_y)]
+
+                segments = 5
+                for i in range(segments):
+                    last_p = points[-1]
+                    
+                    new_x = last_p[0] + random.randint(-90, 90)
+                    new_y = last_p[1] + random.randint(-90, 90)
+                    points.append((new_x, new_y))
+
+                pygame.draw.lines(screen, (0, 0, 0), False, points, 6) 
+                
+                pygame.draw.lines(screen, (255, 0, 0), False, points, 3)
+
+            if game_state == "GAME":
+                enemy_dist = ((hero.x  + 25 - mob.x)**2 + (hero.y  + 25 - mob.y)**2)**0.5 
+                if enemy_dist < self.ult_radius:
+                    mob.alive = False
+                    hero.score += 1
+
+                if tank.active:
+                    dist = ((hero.x  - tank.x)**2 + (hero.y - tank.y)**2)**0.5
+                    if dist < self.ult_radius:
+                        tank.hp = -1
+
+            if self.ult_radius > 600:
+                if self.ult_waves < self.max_waves:
+                    self.ult_waves += 1
+                    self.ult_radius = 0 
+
+                else:
+                    self.ult_active = False
+            
+                
+    def DrawUi(self, screen , hero , haki):
+
+        if self.ultimate_energy >= self.max_ultimate:
+            ult_txt = font.render("HAKI IS READY!", True, (255, 215, 0))
+            screen.blit(ult_txt, (850 + 1, 20 + 25))
+        
+        if self.ultimate_energy >= 100 and random.randint(1, 5) == 1:
+            if hero.current_weapon.name == "shotgun":
+                particles.append([hero.x + offset_x + 45, hero.y + offset_y + 25, random.uniform(-1, 1), -2, 20, (0, 255, 255)])
+            else:
+                particles.append([hero.x + offset_x + 25, hero.y + offset_y + 5, random.uniform(-1, 1), -2, 20, (0, 255, 255)])
+        
+        if self.ultimate_energy >= 100:
+            
+            self.glow_alpha += self.glow_direction
+            if self.glow_alpha >= 150 or self.glow_alpha <= 0:
+                self.glow_direction *= -1 
+
+            s = pygame.Surface((100, 100), pygame.SRCALPHA)
+            pygame.draw.circle(s, (255, 0, 0, self.glow_alpha), (50, 50), 40)
+            if hero.current_weapon.name == "shotgun":
+                screen.blit(s, (hero.x + offset_x - 12 , hero.y + offset_y  ))
+            else:
+                screen.blit(s, (hero.x + offset_x - 22 , hero.y + offset_y - 20 ))
+
+haki = Haki()
+haki.haki_overlay.set_alpha(100) 
+haki.haki_overlay.fill((150, 0, 0))
+                                                                #UI (kill effect)
+class Kill_effect:
+    def __init__(self):
+        self.active = False
+        self.meter = 0
+    
+    def draw(self, screen , offset_x, offset_y ):
+        for p in particles[:]:
+            p[0] += p[2] 
+            p[1] += p[3] 
+            p[4] -= 1    
+            if self.active:
+                color = p[5] if len(p) > 5 else (255, 0, 0)
+            else:
+                color = p[5] if len(p) > 5 else (255, 215, 0)
+            pygame.draw.circle(screen, color, (int(p[0]), int(p[1])), random.randint(2, 4))
+            
+            if p[4] <= 0:
+                particles.remove(p)
+
+        if mob.hit_timer > 0:
+            screen_explosion_x = explosion_x 
+            screen_explosion_y = explosion_y 
+
+            for i in range(8):
+                if self.active:
+                    pygame.draw.circle(screen, (255, 0, 0), (int(screen_explosion_x + 25), int(screen_explosion_y + 25)), random.randint(15, 30))
+                    pygame.draw.circle(screen, (255, 0, 0), (int(screen_explosion_x + 25), int(screen_explosion_y + 25)), random.randint(5, 15))
+                else:
+                    pygame.draw.circle(screen, (255, 255, 0), (int(screen_explosion_x + 25), int(screen_explosion_y + 25)), random.randint(15, 30))
+                    pygame.draw.circle(screen, (255, 100, 0), (int(screen_explosion_x + 25), int(screen_explosion_y + 25)), random.randint(5, 15))
+                    mob.hit_timer -= 1
+
+kill_effect = Kill_effect()
+                                                                #UI of text()
+def show_msg(text):
+    messages.append([text, WIDTH, 190, 200]) 
+
+def show_msg_2(text):
+    messages.append([text, WIDTH, 250, 200])
+
+def show_msg_3(text):
+    messages.append([text, WIDTH, 290 , 100])
+                                                                #save/Load (backend)
+def save_game(score, speed, stamina, high_score, purchased_weapons):
+    data = {
+        "score": score,
+        "speed": speed,
+        "stamina": stamina,
+        "high_score": high_score,
+        "purchased_weapons": purchased_weapons,
+        "achievements": list(unlocked_achievements)
+    }
+    try:
+        with open("save.json", "w") as f:
+            json.dump(data, f , indent=4)
+    except Exception as e:
+        print(f"Error saving data: {e}")
+
+def load_game():
+    global unlocked_achievements
+    global purchased_weapons
+    try:
+        with open("save.json", "r") as f:
+            data = json.load(f)
+            
+            s = data["score"]
+            sp = data["speed"]
+            st = data["stamina"]
+            h_s = data["high_score"]
+            purchased_weapons = data.get("purchased_weapons", [])
+            unlocked_achievements = set(data.get("achievements", []))
+            
+            print(f"success loaded: Score={s}, Speed={sp}, Stamina={st}, h_s={h_s}")
+            print(f"Success JSON loaded! Achievements in system: {unlocked_achievements}")
+            print(f"Success JSON loaded! Weapons in system: {purchased_weapons}")
+            return s, sp, st, h_s
+            
+    except Exception as e:
+        print(f"Data is not finded or nothing in file , starting with base. Error: {e}")
+        purchased_weapons = ["pistol"]
+        unlocked_achievements = set()
+        return 0, 2.5, 100, 0
+                                                                #UI
+def draw_entities(screen, background, offset_x, offset_y):
+    screen.blit(background, (0 + offset_x, 0 + offset_y))
+                                                                #UI
+def draw_ui(screen, high_score, hero , haki, rage_meter , font ):
+    #high score
+    record_txt = font.render(f"BEST RECORD: {high_score}", True, (255, 215, 0))
+    screen.blit(record_txt, (10, 70))
+    #score,speed
+    score_txt = font.render(f"Score:{hero.score}player_Speed: {hero.basespeed}", True, (255, 255, 0))
+    screen.blit(score_txt, (10, 35))
+    #stamina_bar
+    pygame.draw.rect(screen, (40, 40, 40), (15, 15, hero.stamina, 25))
+    pygame.draw.rect(screen, (0, 255, 120), (15, 15, hero.stamina, 25))
+    pygame.draw.rect(screen, (255, 255, 255), (15, 15, hero.stamina, 25), 3)
+    #Ult_bar
+    pygame.draw.rect(screen, (40, 40, 40), (850, 20, haki.ult_bar_width, haki.ult_bar_height))
+    current_ult_w = (haki.ultimate_energy / haki.max_ultimate) * haki.ult_bar_width
+    pygame.draw.rect(screen, (255, 0, 0), (850, 20, current_ult_w, haki.ult_bar_height))
+    #screen effect
+    pulse = (math.sin(pygame.time.get_ticks() * 0.002) + 1) * 20 
+    s = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    pygame.draw.rect(s, (0, 0, 50, pulse), (0, 0, WIDTH, HEIGHT))
+    screen.blit(s, (0, 0))
+
+    pulse_size = 15 + int((haki.ultimate_energy / 100) * 10)
+
+    if haki.ultimate_energy < 100:
+        pygame.draw.circle(screen, (0, 0, 0), (850, 30), pulse_size)
+    else:
+        flash_color = (255, 0, 50) if pygame.time.get_ticks() % 200 < 100 else (200, 0, 0)
+        pygame.draw.circle(screen, flash_color, (850, 30), 25)
+    #fps_counter
+    fps_count = int(clock.get_fps())
+    fps_txt = font.render(f"FPS: {fps_count}", True, (0, 255, 0))
+    screen.blit(fps_txt, (WIDTH - 190, 100))
+    #shadows effect of move
+    for s in shadows[:]:
+        s[2] -= 10 
+        if s[2] <= 0:
+                shadows.remove(s)
+        else:
+            temp_surface = hero.current_weapon.player_sprite.copy()
+            temp_surface.set_alpha(s[2])
+            screen.blit(temp_surface, (s[0] + offset_x, s[1] + offset_y))
+    #Ui for text
+    for m in messages[:]:
+        
+        target_x = WIDTH - 420
+        if m[1] > target_x:
+            m[1] -= 5
+            
+        m[3] -= 0.7
+            
+        msg_txt = font.render(m[0], True, (0, 255, 255))
+        screen.blit(msg_txt, (m[1], m[2]))
+            
+        if m[3] <= 0:
+            messages.remove(m)
+    #barrier of world
+def barrier(hero):
+    if hero.x < 0: hero.x = 0     
+    if hero.x > 3000 - 50 : hero.x = 3000 - 50
+    if hero.y < 0: hero.y = 0       
+    if hero.y > 3000 - 50 : hero.y = 3000 - 50
+    #needed variable for save/load (backend)
+saved_score, saved_speed, saved_stamina , saved_high_score = load_game()
+hero.score = saved_score
+hero.base_speed = saved_speed
+hero.max_stamina = saved_stamina
+hero.stamina = hero.max_stamina
+hero.high_score = saved_high_score
+                                                                #main
+running = True
+while running:
+    events = pygame.event.get()
+    for event in events:
+        if event.type == pygame.QUIT:
+            running = False
+                                #camera x/y
+    offset_x = 500 - hero.x 
+    offset_y = 380 - hero.y 
+
+    if haki.shake_timer > 0:
+        offset_x += random.randint(-20, 20)  
+        offset_y += random.randint(-20, 20)
+        haki.shake_timer -= 1
+
+    if weapon_angle < 0:
+        weapon_angle += 9 
+        if weapon_angle > 0:
+            weapon_angle = 0
+
+    keys = pygame.key.get_pressed()
+                                                                #bullets and shooting
+    if game_state == "GAME" or game_state == "GAME_2":
+        if shoot_timer > 0:
+            shoot_timer -= 1
+        for event in events:
+            if event.type == pygame.KEYDOWN:    
+                if keys[pygame.K_SPACE] and shoot_timer == 0:
+                    if hero.current_weapon.name == "shotgun":
+                        
+                        rect_up = pygame.Rect(hero.x + 40, hero.y + 15, hero.current_weapon.b_width, hero.current_weapon.b_height)
+                        bullets.append([rect_up, hero.current_weapon.bullet_speed, -2, hero.current_weapon.b_color])
+                        
+                        rect_mid = pygame.Rect(hero.x + 40, hero.y + 20, hero.current_weapon.b_width, hero.current_weapon.b_height)
+                        bullets.append([rect_mid, hero.current_weapon.bullet_speed, 0, hero.current_weapon.b_color])
+                        
+                        rect_down = pygame.Rect(hero.x + 40, hero.y + 25, hero.current_weapon.b_width, hero.current_weapon.b_height)
+                        bullets.append([rect_down, hero.current_weapon.bullet_speed, 2, hero.current_weapon.b_color])
+                    
+                    elif hero.current_weapon.name == "sword":
+                        sword_rect = pygame.Rect(hero.x + 45, hero.y - 30, 90, 100)
+        
+                        bullets.append([sword_rect, 0, 0, hero.current_weapon.b_color])
+                        
+                        weapon_angle = -90
+                        sword_lifetime = 5
+
+                    else:
+                        b_rect = pygame.Rect(hero.x + 40, hero.y + 7, hero.current_weapon.b_width, hero.current_weapon.b_height)
+                        bullets.append([b_rect, hero.current_weapon.bullet_speed, 0, hero.current_weapon.b_color])
+                        muzzle_flash_timer = 2
+                        shoot_timer = hero.current_weapon.shoot_delay
+                        s_x = hero.x + offset_x
+                        s_y = hero.y + offset_y - 15
+                        s_speed_x = random.uniform(-4, -2)
+                        s_speed_y = random.uniform(-5, -3)
+                        s_life = random.randint(20, 35)  
+                        shells.append([s_x, s_y, s_speed_x, s_speed_y, s_life])
+                                                                #MENU
+    if game_state == "MENU":
+        screen.blit(menu , (0,0))
+        player_rank = "NONE"
+        if hero.score > 100: player_rank = "BEGGINER"
+        if hero.score > 1000: player_rank = "MIDDLE"
+        if hero.score > 10000: player_rank = "LEGEND"
+        if hero.score > 100000: player_rank = "NO LIFER"
+
+        rank_text = font.render(f"RANK: {player_rank}", True, (0, 255, 255))
+        achievement = font.render("ACHIEVEMENTS" , True, (0, 255, 255))
+        screen.blit(achievement , (WIDTH - 690 , 500 ))
+        screen.blit(rank_text, (WIDTH - 665, 150))
+        
+        title = font.render("MY SUPER GAME", True, (255, 215, 0))
+        hint = font.render("---PRESS ENTER TO START---", True, (255, 215, 0))
+        shop_label = font.render("---PRESS T TO OPEN SHOP OF UPGRADES ---", True, (255, 215, 0))
+        g2 = font.render("---PRESS F TO START ROGALIK ---", True, (255, 215, 0))
+        SAVEGAME = font.render("---PRESS S TO SAVE PROGRESS---", True, (255, 215, 0))
+        screen.blit(shop_label, (WIDTH//2 - 330, 200))
+        screen.blit(title, (WIDTH//2 - 130, 100))
+        screen.blit(hint, (WIDTH//2 - 220, 280))
+        screen.blit(g2 , (WIDTH//2 - 250, 370))
+        screen.blit(SAVEGAME, (WIDTH//2 - 250, 450))
+
+
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN: 
+                    game_state = "GAME"
+
+        for event in events:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_t:
+                            game_state = "SHOP"
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_f:
+                        game_state = "GAME_2"
+                        enemies.clear()
+                        survival_wave += 1
+                        enemies.append(Wave_Enemy())
+
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_s:
+                    save_game(hero.score, hero.basespeed, hero.max_stamina, high_score , purchased_weapons)
+                    show_msg("SAVED PROGRESS")
+                    print("SAVED PROGRESS")
+
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_g:
+                    game_state = "ACHIEVEMENTS"
+
+                                                                                #GAME 1
+    elif game_state == "GAME":
+        barrier(hero)
+        screen.blit(background, (0 + offset_x, 0 + offset_y))
+        keys = pygame.key.get_pressed()
+        if hero.score > high_score:
+            high_score = hero.score
+        if shoot_timer > 0:
+            shoot_timer -= 1
+        if freeze_timer > 0:
+            freeze_timer -= 1                                                   
+                                                                                #Hot keys
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q and haki.ultimate_energy == haki.max_ultimate:
+                    aura_sound.play()
+                    haki.shake_timer = 45
+                    haki.ult_active = True
+                    haki.ult_waves += 3
+                    haki.ult_radius = 0
+                    haki.ultimate_energy = 0 
+                    haki.ultimate_energy = 0 
+                    show_msg_2("HAKI IS ACTIVATED!!!")
+                    print("HAKI IS ACTIVATED!!!")
+            
+            if keys[pygame.K_1]:
+                hero.current_weapon = pistol
+                show_msg_2("EQUIPED PISTOL")
+            if keys[pygame.K_2]:
+                if "rifle" in purchased_weapons:
+                    hero.current_weapon = rifle
+                    show_msg_2("EQUIPED RIFLE!!")
+                else:
+                    show_msg_3("NOT BUYED")
+            if keys[pygame.K_3]:
+                if "shotgun" in purchased_weapons:
+                    hero.current_weapon = shotgun
+                    show_msg_2("EQUIPED SHOTGUN!!!")
+                else:
+                    show_msg_3("NOT BUYED")
+            if keys[pygame.K_4]:
+                if "sword" in purchased_weapons:
+                    hero.current_weapon = sword
+                    show_msg_2("EQUIPED SWORD!!!")
+                else:
+                    show_msg_3("NOT BUYED")
+                                                                                #GAME 1 LOGIC  
+        hero.move()
+
+        player_rect = pygame.Rect(hero.x, hero.y, hero.size, hero.size)
+        enemy_rect = pygame.Rect(mob.x, mob.y, 50, 50)
+        boss_rect = pygame.Rect(tank.x, tank.y , 80 , 80)
+
+        mob.move(hero.x , hero.y ,haki.ult_active)
+
+        if player_rect.colliderect(enemy_rect):
+            if hero.has_revive:
+                hero.has_revive = False 
+                x, y = 1500, 1500
+                show_msg("I'm still standing")
+                print(f"{GOLD}I'm still standing")
+            else:
+                show_msg("RESPAWN")
+                print(f"{RED}DIED")
+                
+                stamina = 100       
+                hero.x, hero.y = 1500, 1500
+                game_state = "GAMEOVER"
+        
+        if player_rect.colliderect(boss_rect) and tank.active:
+            if hero.has_revive:
+                hero.has_revive = False 
+                hero.x, hero.y = 1500, 1500
+                show_msg("I'm still standing")
+                print(f"{GOLD}I'm still standing")
+
+            else:
+                show_msg("RESPAWN")
+                print(f"{RED}DIED")
+                boss_active = False  
+                
+                tank.hp = tank.max_hp 
+                tank.active = False
+                hero.x, hero.y = 1500, 1500
+                game_state = "GAMEOVER"
+                                                                #mobs , bosses
+        tank.spawn()        
+        tank.move(hero , haki.ult_active)
+
+        mob.draw(screen, enemy_img , offset_x, offset_y)
+        tank.draw(screen , boss_img , offset_x , offset_y )
+        #sword ui logic
+        screen_x = hero.x + offset_x
+        screen_y = hero.y + offset_y
+
+        if hero.current_weapon.name == "sword":
+            rotated_sword = pygame.transform.rotate(hero.current_weapon.player_sprite, weapon_angle)
+            screen.blit(rotated_sword, (screen_x , screen_y ))
+        else:
+            screen.blit(hero.current_weapon.player_sprite, (screen_x , screen_y ))
+        #xp ui
+        xp_ratio = hero.xp / hero.xp_to_next
+        hero.draw_xp(screen , xp_ratio)
+        #haki(Ult)
+        haki.Ult(screen , hero , mob , tank , haki,wave_Enemy)
+        haki.DrawUi(screen , hero , haki)
+        haki.Ult(screen , hero , mob , tank , haki,wave_Enemy)
+                                                                                #GAME 1 UI
+        for p in shot_particles[:]:
+            p[4] -= 1  
+            if p[4] <= 0:
+                shot_particles.remove(p)
+            else:
+                p[0] += p[2]
+                p[1] += p[3]
+                
+                radius = max(1, p[4] // 2)
+                pygame.draw.circle(screen, (255, 200, 0), (int(p[0] + offset_x), int(p[1] + offset_y - 10)), radius)
+
+        if lvl_flash_timer > 0:
+            overlay = pygame.Surface((WIDTH, HEIGHT))
+            overlay.set_alpha(lvl_flash_timer * 10)
+            overlay.fill((255, 255, 0))
+            screen.blit(overlay, (0, 0))
+            lvl_flash_timer -= 1
+
+        for s in shells[:]:
+            s[4] -= 1
+            if s[4] <= 0:
+                shells.remove(s)
+            else:
+                s[0] += s[2]  
+                s[1] += s[3]  
+                s[3] += 0.3 
+
+                pygame.draw.rect(screen , (230 , 180 , 0), (int(s[0]) , int(s[1]), 4, 2))
+        
+        for d in damage_numbers[:]:
+            d[1] -= 1 
+            d[3] -= 1 
+
+            dmg_txt = font.render(d[2], True, (255, 50, 50))
+            screen.blit(dmg_txt, (d[0], d[1]))
+            
+            if d[3] <= 0:
+                damage_numbers.remove(d)      
+
+        kill_effect.draw(screen , offset_x, offset_y)
+        
+        draw_ui(screen, high_score, hero , haki, rage_meter , font)
+                                                                                                #GAME 1 LOGIC (BULLETS, COLLISIONS)
+        for b in bullets[:]:
+            if sword_lifetime > 0:
+                sword_lifetime -= 1
+                if sword_lifetime == 0:
+                    for b in bullets[:]:
+                        if b[1] == 0 and b[2] == 0: 
+                            if b in bullets:
+                                bullets.remove(b)
+            if b[1] == 0 and b[2] == 0:
+                b[0].x = hero.x + 45
+                b[0].y = hero.y - 30
+                pygame.draw.arc(screen, b[3], (b[0].x + offset_x, b[0].y + offset_y, b[0].width, b[0].height), -1.2, 1.2, 16)
+                pygame.draw.arc(screen, (220, 255, 240), (b[0].x + offset_x + 6, b[0].y + offset_y + 6, b[0].width - 12, b[0].height - 12), -1.2, 1.2, 4)
+            else:
+                b[0].x += b[1] 
+                b[0].y += b[2]
+                pygame.draw.rect(screen, b[2], (b[0].x + offset_x, b[0].y + offset_y, b[0].width, b[0].height))
+                pygame.draw.rect(screen, b[3], (b[0].x + offset_x, b[0].y + offset_y, b[0].width, b[0].height))
+            if b[0].x > 3000 or b[0].x < -3000 or b[0].y > 3000 or b[0].y < -3000:
+                bullets.remove(b)
+
+            if b[0].colliderect(enemy_rect):
+                haki.ultimate_energy += 20
+                if haki.ultimate_energy > haki.max_ultimate: 
+                    haki.ultimate_energy = haki.max_ultimate
+
+                for _ in range(15):
+                    p_x = mob.x + offset_x 
+                    p_y = mob.y + offset_y + 15
+                    p_sx = random.uniform(-4, 4) 
+                    p_sy = random.uniform(-4, 4) 
+                    p_life = random.randint(20, 40) 
+                    particles.append([p_x, p_y, p_sx, p_sy, p_life])
+
+                mob.hit_timer = 25
+                hero.score += 5
+                explosion_x = mob.x + offset_x
+                explosion_y = mob.y + offset_y
+                hero.xp += 25
+                if b not in bullets_to_remove:
+                    bullets_to_remove.append(b)
+                mob.alive = False
+                if mob.alive == False:
+                    mob.x = hero.x + random.choice([-800, 800])
+                    mob.y = hero.y + random.choice([-600, 600])
+                    mob.alive = True
+
+            if tank.active:
+                if b[0].colliderect(boss_rect):
+                    haki.ultimate_energy += 5
+                    if haki.ultimate_energy > haki.max_ultimate: 
+                        haki.ultimate_energy = haki.max_ultimate
+                    tank.hp -= 1
+                    damage_numbers.append([tank.x + offset_x, tank.y + offset_y - 10, "-1",  30]) 
+                    bullets.remove(b)
+
+                    if tank.hp <= 0:
+                        haki.ultimate_energy += 20
+                        if haki.ultimate_energy > haki.max_ultimate: 
+                            haki.ultimate_energy = haki.max_ultimate
+                        for _ in range(60): 
+                            p_x = tank.x + offset_x 
+                            p_y = tank.y + offset_y
+                            p_sx = random.uniform(-6, 6)
+                            p_sy = random.uniform(-6, 6)
+                            p_life = random.randint(30, 60)     
+                            p_color = random.choice([(255, 100, 0), (255, 50, 0), (200, 0, 0)])
+                            particles.append([p_x, p_y, p_sx, p_sy, p_life, p_color])
+
+                        hero.score += 3
+                        tank.active = False
+                        tank.y = - 100
+                        tank.hp = tank.max_hp 
+                    
+
+        for b in bullets_to_remove:
+            if b in bullets:
+                bullets.remove(b)
+
+                if hero.score >= 100 and "SCORE_100" not in unlocked_achievements:
+                    achievement_sound.play()
+                    unlocked_achievements.add("SCORE_100")
+                    show_msg_3("ACHIEVEMNET 100 POINTS")
+                    lvl_flash_timer = 30
+                    freeze_timer = 288
+                elif hero.score >= 1000 and "SCORE_1000" not in unlocked_achievements:
+                    achievement_sound.play()
+                    unlocked_achievements.add("SCORE_1000")
+                    show_msg_3("ACHIEVEMNET 1000 POINTS")
+                    lvl_flash_timer = 30
+                    freeze_timer = 288
+                elif hero.score >= 10000 and "SCORE_10000" not in unlocked_achievements:
+                    achievement_sound.play()
+                    unlocked_achievements.add("SCORE_10000")
+                    show_msg_3("ACHIEVEMNET 10000 POINTS")
+                    lvl_flash_timer = 30
+                    freeze_timer = 288
+                        
+
+                if hero.xp >= hero.xp_to_next:
+                    achievement_sound.play()
+                    lvl_flash_timer = 30
+                    hero.lvl += 1
+                    hero.xp = 0
+                    hero.xp_to_next = int(hero.xp_to_next * 2)
+                    show_msg(f"LEVEL UP! LVL {hero.lvl}")
+
+                    bonus_type = random.choice(["SPEED", "STAMINA"])
+            
+                    if bonus_type == "SPEED":
+                        hero.basespeed += 0.2
+                        show_msg_2("LEVEL UP! SPEED +0.3")
+                    elif bonus_type == "STAMINA":
+                        hero.max_stamina += 20
+                        hero.stamina = hero.max_stamina 
+                        show_msg_2("LEVEL UP! STAMINA +20")
+                        
+                    if hero.score >0 and hero.score % 20 == 0:
+                        if hero.score > last_milestone:
+                            last_milestone = hero.score
+
+                            bonus = random.choice(["SPEED", "STAMINA", "REVIVE"])
+
+                            if bonus == "SPEED":
+                                hero.basespeed += 0.2
+                                save_game(hero.score, hero.basespeed, hero.max_stamina,high_score,purchased_weapons)
+                                show_msg("BASE_SPEED UPGRADED!")
+                                print("BASE_SPEED UPGRADED!")
+                            elif bonus == "STAMINA":
+                                hero.max_stamina += 50
+                                hero.stamina += 50
+                                save_game(hero.score, hero.basespeed, hero.max_stamina,high_score,purchased_weapons)
+                                show_msg("MAX STAMINA UPGRADED!")
+                                print("MAX STAMINA UPGRADED!")
+                            elif bonus == "REVIVE":
+                                hero.has_revive = True
+                                show_msg("GIVEN 2 CHANCE")
+                                print("GIVEN 2 CHANCE")
+        
+                        continue
+            
+            if tank.active:
+                if b[0].colliderect(boss_rect):
+                    haki.ultimate_energy += 5
+                    if haki.ultimate_energy > haki.max_ultimate: 
+                        haki.ultimate_energy = haki.max_ultimate
+                    tank.hp -= 1
+                    damage_numbers.append([tank.x + 30, tank.y, "-1", 30]) 
+                    bullets.remove(b)
+
+                    if tank.hp <= 0:
+                        haki.ultimate_energy += 20
+                        if haki.ultimate_energy > haki.max_ultimate: 
+                            haki.ultimate_energy = haki.max_ultimate
+                            for _ in range(60): 
+                                p_x = tank.x + 40
+                                p_y = tank.y + 40
+                                p_sx = random.uniform(-6, 6)
+                                p_sy = random.uniform(-6, 6)
+                                p_life = random.randint(30, 60) 
+                                    
+                                p_color = random.choice([(255, 100, 0), (255, 50, 0), (200, 0, 0)])
+                                particles.append([p_x, p_y, p_sx, p_sy, p_life, p_color])
+
+                        hero.score += 3
+                        tank.active = False 
+                        tank.hp = tank.max_hp 
+                        tank.y = -100    
+                                                                #GAME 2 (SURVIVAL MODE) wave mobs
+    elif game_state == "GAME_2":
+        barrier(hero)
+        screen.blit(background, (0 + offset_x, 0 + offset_y))
+        keys = pygame.key.get_pressed()
+        if hero.score > high_score:
+            high_score = hero.score
+        if shoot_timer > 0:
+            shoot_timer -= 1
+        if freeze_timer > 0:
+            freeze_timer -= 1
+        for event in events:
+                                                                #Hot keys
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q and haki.ultimate_energy == haki.max_ultimate:
+                    aura_sound.play()
+                    haki.shake_timer = 45
+                    haki.ult_active = True
+                    haki.ult_waves += 3
+                    haki.ult_radius = 0
+                    haki.ultimate_energy = 0 
+                    haki.ultimate_energy = 0 
+                    show_msg_2("HAKI IS ACTIVATED!!!")
+                    print("HAKI IS ACTIVATED!!!")
+            
+            if keys[pygame.K_1]:
+                hero.current_weapon = pistol
+                show_msg_2("EQUIPED PISTOL")
+            
+            if keys[pygame.K_2]:
+                if "rifle" in purchased_weapons:
+                    hero.current_weapon = rifle
+                    show_msg_2("EQUIPED RIFLE!!")
+                else:
+                    show_msg_3("NOT BUYED")
+            if keys[pygame.K_3]:
+                if "shotgun" in purchased_weapons:
+                    hero.current_weapon = shotgun
+                    show_msg_2("EQUIPED SHOTGUN!!!")
+                else:
+                    show_msg_3("NOT BUYED")
+            if keys[pygame.K_4]:
+                if "sword" in purchased_weapons:
+                    hero.current_weapon = sword
+                    show_msg_2("EQUIPED SWORD!!!")
+                else:
+                    show_msg_3("NOT BUYED")
+        hero.move()                                             
+        for e in enemies[:]:
+            e.draw(screen, survival_enemy_img , offset_x, offset_y)
+            e.move(hero)
+            mob_rect = pygame.Rect(e.wave_x, e.wave_y, 50, 50)
+            hero_rect = pygame.Rect(hero.x, hero.y, 50, 50)
+
+            if hero_rect.colliderect(mob_rect):
+                if hero.has_revive:
+                    hero.has_revive = False 
+                    x, y = 1500, 1500
+                    show_msg("I'm still standing")
+                    print(f"{GOLD}I'm still standing")
+                else:
+                    show_msg("RESPAWN")
+                    print(f"{RED}DIED")
+                    
+                    stamina = 100       
+                    hero.x, hero.y = 1500, 1500    
+                    game_state = "GAMEOVER"
+                                                                    #GAME 2 LOGIC (BULLETS, COLLISIONS)
+            for b in bullets[:]:
+                if sword_lifetime > 0:
+                    sword_lifetime -= 1
+                    if sword_lifetime == 0:
+                        for b in bullets[:]:
+                            if b[1] == 0 and b[2] == 0: 
+                                if b in bullets:
+                                    bullets.remove(b)
+                if b[1] == 0 and b[2] == 0:
+                        b[0].x = hero.x + 45
+                        b[0].y = hero.y - 30
+                        pygame.draw.arc(screen, b[3], (b[0].x + offset_x, b[0].y + offset_y, b[0].width, b[0].height), -1.2, 1.2, 16)
+                        pygame.draw.arc(screen, (220, 255, 240), (b[0].x + offset_x + 6, b[0].y + offset_y + 6, b[0].width - 12, b[0].height - 12), -1.2, 1.2, 4)
+                else:
+                    b[0].x += b[1] 
+                    b[0].y += b[2]
+                    pygame.draw.rect(screen, b[2], (b[0].x + offset_x, b[0].y + offset_y, b[0].width, b[0].height))
+                    pygame.draw.rect(screen, b[3], (b[0].x + offset_x, b[0].y + offset_y, b[0].width, b[0].height))
+                
+                if b[0].x > 3000 or b[0].x < -3000 or b[0].y > 3000 or b[0].y < -3000:
+                    if b in bullets:
+                        bullets.remove(b)
+                
+                if b[0].colliderect(pygame.Rect(e.wave_x , e.wave_y , 50 , 50)):
+
+
+                    if e in enemies:
+                        e.wave_alive = False
+                        enemies.remove(e)
+                        if b not in bullets_to_remove:
+                            bullets_to_remove.append(b)
+
+                    haki.ultimate_energy += 20
+                    if haki.ultimate_energy > haki.max_ultimate: 
+                        haki.ultimate_energy = haki.max_ultimate
+
+                    for _ in range(15):
+                        p_x = e.wave_x + offset_x 
+                        p_y = e.wave_y + offset_y + 15
+                        p_sx = random.uniform(-4, 4) 
+                        p_sy = random.uniform(-4, 4) 
+                        p_life = random.randint(20, 40) 
+                        particles.append([p_x, p_y, p_sx, p_sy, p_life])
+                    
+                    if 'muzzle_flash_timer' in locals() and muzzle_flash_timer > 0:
+                        pygame.draw.circle(screen, (255, 100, 0), (int(hero.x + offset_x + 60), int(hero.y + offset_y + 11)), 12)
+                        pygame.draw.circle(screen, (255, 255, 200), (int(hero.x + offset_x + 60), int(hero.y + offset_y + 11)), 6)
+                        muzzle_flash_timer -= 4
+
+                    hero.score += 5
+                    explosion_x = e.wave_x + offset_x
+                    explosion_y = e.wave_y + offset_y
+                    mob.hit_timer = 25
+                    hero.xp += 25
+                    Wave_Enemy.x , Wave_Enemy.y = random.randint(600, 1000) , random.randint(50, 550)
+
+                    if hero.score >= 100 and "SCORE_100" not in unlocked_achievements:
+                        achievement_sound.play()
+                        unlocked_achievements.add("SCORE_100")
+                        show_msg_3("ACHIEVEMNET 100 POINTS")
+                        lvl_flash_timer = 30
+                        freeze_timer = 288
+                    elif hero.score >= 1000 and "SCORE_1000" not in unlocked_achievements:
+                        achievement_sound.play()
+                        unlocked_achievements.add("SCORE_1000")
+                        show_msg_3("ACHIEVEMNET 1000 POINTS")
+                        lvl_flash_timer = 30
+                        freeze_timer = 288
+                    elif hero.score >= 10000 and "SCORE_10000" not in unlocked_achievements:
+                        achievement_sound.play()
+                        unlocked_achievements.add("SCORE_10000")
+                        show_msg_3("ACHIEVEMNET 10000 POINTS")
+                        lvl_flash_timer = 30
+                        freeze_timer = 288
+
+                    if hero.xp >= hero.xp_to_next:
+                        achievement_sound.play()
+                        lvl_flash_timer = 30
+                        hero.lvl += 1
+                        hero.xp = 0
+                        hero.xp_to_next = int(hero.xp_to_next * 2)
+                        show_msg(f"LEVEL UP! LVL {hero.lvl}")
+
+                        bonus_type = random.choice(["SPEED", "STAMINA"])
+        
+                        if bonus_type == "SPEED":
+                            hero.basespeed += 0.3
+                            show_msg_2("LEVEL UP! SPEED +0.3")
+                        elif bonus_type == "STAMINA":
+                            hero.max_stamina += 20
+                            hero.stamina = hero.max_stamina 
+                            show_msg_2("LEVEL UP! STAMINA +20")
+                    
+                    if hero.score >0 and hero.score % 20 == 0:
+                        if hero.score > last_milestone:
+                            last_milestone = hero.score
+
+                            bonus = random.choice(["SPEED", "STAMINA", "REVIVE"])
+
+                            if bonus == "SPEED":
+                                hero.basespeed += 0.5
+                                save_game(hero.score, hero.basespeed, hero.max_stamina,high_score,purchased_weapons)
+                                show_msg("BASE_SPEED UPGRADED!")
+                                print("BASE_SPEED UPGRADED!")
+                            elif bonus == "STAMINA":
+                                hero.max_stamina += 50
+                                hero.stamina += 50
+                                save_game(hero.score, hero.basespeed, hero.max_stamina,high_score,purchased_weapons)
+                                show_msg("MAX STAMINA UPGRADED!")
+                                print("MAX STAMINA UPGRADED!")
+                            elif bonus == "REVIVE":
+                                hero.has_revive = True
+                                show_msg("GIVEN 2 CHANCE")
+                                print("GIVEN 2 CHANCE")
+            for b in bullets_to_remove:
+                    if b in bullets:
+                        bullets.remove(b)
+                    continue
+                                                                #GAME 2 LOGIC
+        if len(enemies) == 0:
+            survival_wave += 1
+            show_msg(f"WAVE {survival_wave} STARTED!")
+            
+            for _ in range(5 + survival_wave * 2):
+                enemies.append(Wave_Enemy())
+        hero.move()
+        screen_x = hero.x + offset_x
+        screen_y = hero.y + offset_y
+
+        if hero.current_weapon.name == "sword":
+            rotated_sword = pygame.transform.rotate(hero.current_weapon.player_sprite, weapon_angle)
+            screen.blit(rotated_sword, (screen_x , screen_y ))
+        else:
+            screen.blit(hero.current_weapon.player_sprite, (screen_x , screen_y ))
+                                                                                #GAME 2 UI
+        xp_ratio = hero.xp / hero.xp_to_next
+        hero.draw_xp(screen , xp_ratio)
+        haki.Ult(screen , hero , mob , tank , haki, wave_Enemy)
+        haki.DrawUi(screen , hero , haki)
+        haki.Ult(screen , hero , mob , tank , haki, wave_Enemy)
+
+        draw_ui(screen, high_score, hero , haki, rage_meter , font)
+
+        for p in shot_particles[:]:
+            p[4] -= 1  
+            if p[4] <= 0:
+                shot_particles.remove(p)
+            else:
+                p[0] += p[2]
+                p[1] += p[3]
+                
+                radius = max(1, p[4] // 2)
+                pygame.draw.circle(screen, (255, 200, 0), (int(p[0] + offset_x), int(p[1] + offset_y - 10)), radius)
+
+        if lvl_flash_timer > 0:
+            overlay = pygame.Surface((WIDTH, HEIGHT))
+            overlay.set_alpha(lvl_flash_timer * 10)
+            overlay.fill((255, 255, 0))
+            screen.blit(overlay, (0, 0))
+            lvl_flash_timer -= 1
+        
+        for s in shells[:]:
+            s[4] -= 1
+            if s[4] <= 0:
+                shells.remove(s)
+            else:
+                s[0] += s[2]  
+                s[1] += s[3]  
+                s[3] += 0.3 
+
+                pygame.draw.rect(screen , (230 , 180 , 0), (int(s[0]) , int(s[1]), 4, 2))
+        kill_effect.draw(screen , offset_x , offset_y)
+        
+        draw_ui(screen, high_score, hero , haki, rage_meter , font)
+                                                                                #GAMEOVER(DIED)
+    elif game_state == "GAMEOVER":
+        screen.blit(died , (0, 0))
+        msg = font.render("YOU DIED! PRESS R TO RESTART", True, (255, 255, 0))
+        screen.blit(msg, (WIDTH//2 - 240, 550//2))
+        
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_r:
+                    game_state = "MENU"
+        
+                                                                                #SHOP
+    elif game_state == "SHOP":
+        screen.blit(shop, (0, 0))
+
+        for m in messages[:]:
+        
+            target_x = WIDTH - 420
+            if m[1] > target_x:
+                m[1] -= 5
+            
+            m[3] -= 1
+            
+            msg_txt = font.render(m[0], True, (0, 255, 255))
+            screen.blit(msg_txt, (m[1], m[2]))
+            
+            if m[3] <= 0:
+                messages.remove(m)
+        
+        if "pistol" in purchased_weapons and "rifle" in purchased_weapons and "shotgun" in purchased_weapons and "sword" in purchased_weapons:
+    
+            if "ALL_WEAPONS_COLLECTED" not in unlocked_achievements:
+                unlocked_achievements.add("ALL_WEAPONS_COLLECTED")
+                show_msg("ACHIEVEMENT: ARSENAL COMMANDER!")
+                lvl_flash_timer = 30
+                
+
+        msg = font.render("WELCOME TO SHOP! Press ESC to return", True, (255, 255, 255))
+        frags_text = font.render(f"Frags(score): {hero.score}", True , (255, 255, 255))
+        price_text = font.render(f"Speed: {500} Frags | Stamina: {100} Frags | Revive: {1000} Frags", True, (255, 255, 255))
+        rifle_price_text = font.render(f"Rifle: {250}Frags | ", True, (255, 255, 255))
+        shotgun_price_text = font.render(f"Shotgun: {1500}Frags", True, (255, 255, 255))
+        sword_price_text = font.render(f"Sword: {2500}Frags", True, (255,255,255))
+        screen.blit(msg, (WIDTH//2 - 340, 300//2))
+        screen.blit(frags_text, (WIDTH//2 - 340, 450//2))
+        screen.blit(price_text, (WIDTH//2 - 340, 600//2))
+        screen.blit(rifle_price_text, (WIDTH//2 - 250, 700//2))
+        screen.blit(shotgun_price_text, (WIDTH//2 - 20, 700//2))
+        screen.blit(sword_price_text, (WIDTH//2 - 150, 800//2))
+
+    elif game_state == "SHOP":
+        for event in events:
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_1:
+                    if hero.score >= 500: 
+                        hero.score -= 500 
+                        buy_sound.play()
+                        hero.basespeed += 0.5
+                        save_game(hero.score, hero.basespeed, hero.max_stamina, high_score,purchased_weapons)
+
+                    else:
+                        show_msg("Enough score bro ")
+                        print(f"{GOLD}Enough score bro ")
+
+                elif event.key == pygame.K_2:
+                    if hero.score >= 100:
+                        hero.score -= 100
+                        hero.max_stamina += 50
+                        hero.stamina += 50
+                        buy_sound.play()
+                        save_game(hero.score, hero.basespeed, hero.max_stamina,high_score,purchased_weapons)
+                    
+                elif event.key == pygame.K_3:
+                    if hero.score >= 1000:
+                        hero.score -= 1000
+                        hero.has_revive = True
+                        buy_sound.play()
+
+                    else:
+                        show_msg("Enough score bro ")
+                        print(f"{GOLD} Enough score bro")
+                elif event.key == pygame.K_4:
+                    if hero.score >= 250 and "rifle" not in purchased_weapons :
+                        hero.score -= 250
+                        buy_sound.play()
+                        purchased_weapons.append("rifle")
+                        show_msg("WEAPON PURCHASED: RIFLE UNLOCKED!")
+                        save_game(hero.score, hero.basespeed, hero.max_stamina, high_score, purchased_weapons)
+                    else:
+                        show_msg("Enough score bro ")
+                        print(f"{GOLD} Enough score bro Or buyed")
+
+                elif event.key == pygame.K_5:
+                    if hero.score >= 1500 and "shotgun" not in purchased_weapons :
+                        hero.score -= 1500
+                        buy_sound.play()
+                        purchased_weapons.append("shotgun")
+                        show_msg("WEAPON PURCHASED: SHOTGUN UNLOCKED!")
+                        save_game(hero.score, hero.basespeed, hero.max_stamina, high_score, purchased_weapons)
+                    else:
+                        show_msg("Enough score bro ")
+                        print(f"{GOLD} Enough score bro Or buyed")
+                elif event.key == pygame.K_6:
+                    if hero.score >= 2500 and "sword" not in purchased_weapons :
+                        hero.score -= 2500
+                        buy_sound.play()
+                        purchased_weapons.append("sword")
+                        show_msg("WEAPON PURCHASED: SWORD UNLOCKED!")
+                        save_game(hero.score, hero.basespeed, hero.max_stamina, high_score, purchased_weapons)
+                    else:
+                        show_msg("Enough score bro ")
+                        print(f"{GOLD} Enough score bro Or buyed")
+
+
+        for event in events:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                            game_state = "MENU"   
+                                                                                #ACHIEVEMENTS
+    elif game_state == "ACHIEVEMENTS":
+        screen.fill((10, 10, 15))
+        pygame.draw.rect(screen, (20, 20, 30), (50, 50, 1000, 700))
+        pygame.draw.rect(screen, (0, 255, 255), (50, 50, 1000, 700), 4)
+
+        title_fon = font.render("HERO ACHIEVEMENTS:", True, (255, 255, 255))
+        screen.blit(title_fon, (350, 80))
+
+        ach_x = 100
+        ach_y = 140
+        line_height = 80
+        for ach in unlocked_achievements:
+            if ach == "SCORE_100":
+                ach_text = "• CENTR OF ATTENTION (100 PTS)"
+                ach_sub = "// Earned 100 points."
+                text_color = (255, 200, 0) 
+            elif ach == "SCORE_1000":
+                ach_text = "• PRO GAMER "
+                ach_sub = "// Earned 1000 points."
+                text_color = (0, 255, 255)
+            elif ach == "SCORE_10000":
+                ach_text = "• EMPEROR OF GAME"
+                ach_sub = "//Earned 10000 points."
+                text_color = (255, 0, 50) 
+            elif ach == "ALL_WEAPONS_COLLECTED":
+                ach_text = "[★] ARSENAL COMMANDER"
+                ach_sub = "STATUS: ACTIVE // All weapons collected. Absolute master."
+                text_color = (150, 0, 255)
+            else:
+                ach_text = f"• UNKNOWN: {ach}"
+                ach_sub = "STATUS: LOCKED // No data found in backend database."
+                text_color = (200, 200, 200)
+
+            render_ach = font.render(ach_text, True, text_color)
+            screen.blit(render_ach, (ach_x, ach_y))
+
+            render_sub = font.render(ach_sub, True, (160, 160, 170))
+            screen.blit(render_sub, (ach_x + 30, ach_y + 30))
+            
+            ach_y += line_height
+        
+        for event in events:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                            game_state = "MENU"
+
+    pygame.display.flip()
+    clock.tick(144)
+
+pygame.quit()
+#END OF CODE
