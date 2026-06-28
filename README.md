@@ -6,8 +6,9 @@ An advanced 2-in-1 open-world Pygame action game featuring a custom Haki system,
 Welcome to my first massive open-world game built entirely from scratch using **Pygame**! This project features a fully functional custom physics engine, dynamic camera rendering, multiple game modes, an in-game economy, and shop mechanics.
 
 ## 🚀 DOWNLOAD & PLAY (Standalone Windows Executable)
-👉 [**CLICK HERE TO DOWNLOAD THE GAME (.ZIP)**](https://drive.google.com/drive/folders/1AOztF0Ao_MkqOjMbwTgKNoa62dQWYu1V?usp=drive_link)
+👉 [**CLICK HERE TO DOWNLOAD THE GAME (.ZIP)**](https://drive.google.com/file/d/1FfaogBL3LCl8UtZH20ygzZSynoI-G62p/view?usp=drive_link)
 *(Just download the archive, extract it, open the `dist` folder, and run `game.exe`. No Python installation required!)*
+*⚠️ Make sure to click 'Extract All' (or 'Extract here') first! Once everything is fully extracted, you can run and play the game❗*
 
 ---
 
